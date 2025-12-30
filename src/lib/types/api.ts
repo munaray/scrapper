@@ -189,3 +189,24 @@ export interface JobStatsResponse {
   top_companies: Array<{ company: string; count: number }>;
   top_skills: Array<{ skill: string; count: number }>;
 }
+
+export type SortableColumn = 'title' | 'company' | 'location' | 'posted_date' | 'salary';
+
+export interface SortConfig {
+  column: SortableColumn | null;
+  direction: 'asc' | 'desc' | null;
+}
+
+export interface JobFilters {
+  jobType: string;
+  remoteOption: string;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  atsDetected: boolean | null;
+  easyApply: boolean | null;
+  contractType: string;
+}
+
+export const JOB_TYPE_OPTIONS = ['All', 'Full-time', 'Part-time', 'Contract', 'Internship', 'Temporary'] as const;
+export const REMOTE_OPTIONS = ['All', 'Remote', 'On-site', 'Hybrid'] as const;
+export const CONTRACT_TYPE_OPTIONS = ['All', 'Permanent', 'Fixed-term', 'Temporary', 'Freelance'] as const;

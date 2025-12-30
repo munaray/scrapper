@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { scraperApi } from "@/lib/api/scraper";
-import type { Job, JobsListResponse } from "@/lib/types/api";
+import type { Job, JobsListResponse, JobFilters, SortConfig, SortableColumn } from "@/lib/types/api";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
-import { JobCard } from "@/components/jobs/job-card";
-import { JobFilters } from "@/components/jobs/job-filters";
+import { JobTable } from "@/components/jobs/job-table";
+import { EnhancedJobFilters } from "@/components/jobs/enhanced-job-filters";
 import { JobDetailModal } from "@/components/jobs/job-detail-modal";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getJobId } from "@/lib/utils/job-helpers";
+import { applyClientFilters, getActiveFilterCount } from "@/lib/utils/job-filters";
+import { sortJobs, getNextSortDirection } from "@/lib/utils/job-sorting";
 
 export default function JobsPage() {
 	const [jobs, setJobs] = useState<Job[]>([]);
@@ -23,9 +23,19 @@ export default function JobsPage() {
 	const [totalCount, setTotalCount] = useState(0);
 	const [pageSize] = useState(20);
 
-	const [filters, setFilters] = useState({
-		location: "",
-		company: "",
+	const [filters, setFilters] = useState<JobFilters>({
+		jobType: '',
+		remoteOption: '',
+		salaryMin: null,
+		salaryMax: null,
+		atsDetected: null,
+		easyApply: null,
+		contractType: '',
+	});
+
+	const [sortConfig, setSortConfig] = useState<SortConfig>({
+		column: null,
+		direction: null,
 	});
 
 	const fetchJobs = async () => {
@@ -36,8 +46,6 @@ export default function JobsPage() {
 			const params = {
 				page,
 				page_size: pageSize,
-				...(filters.location && { location: filters.location }),
-				...(filters.company && { company: filters.company }),
 			};
 
 			const response: JobsListResponse = await scraperApi.getJobs(params);
@@ -56,14 +64,24 @@ export default function JobsPage() {
 
 	useEffect(() => {
 		fetchJobs();
-	}, [page, filters]);
+	}, [page]);
 
-	const handleFilterChange = (newFilters: {
-		location: string;
-		company: string;
-	}) => {
+	const processedJobs = useMemo(() => {
+		let filtered = applyClientFilters(jobs, filters);
+		let sorted = sortJobs(filtered, sortConfig);
+		return sorted;
+	}, [jobs, filters, sortConfig]);
+
+	const handleFilterChange = (newFilters: JobFilters) => {
 		setFilters(newFilters);
-		setPage(1);
+	};
+
+	const handleSort = (column: SortableColumn) => {
+		const newDirection = getNextSortDirection(sortConfig.column, sortConfig.direction, column);
+		setSortConfig({
+			column: newDirection === null ? null : column,
+			direction: newDirection,
+		});
 	};
 
 	const handlePreviousPage = () => {
@@ -87,9 +105,10 @@ export default function JobsPage() {
 					</p>
 				</div>
 
-				<JobFilters
-					onFilterChange={handleFilterChange}
+				<EnhancedJobFilters
 					filters={filters}
+					onFilterChange={handleFilterChange}
+					activeFilterCount={getActiveFilterCount(filters)}
 				/>
 
 				{error && (
@@ -98,13 +117,7 @@ export default function JobsPage() {
 					</div>
 				)}
 
-				{loading ? (
-					<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-						{Array.from({ length: 6 }).map((_, i) => (
-							<Skeleton key={i} className="h-64 rounded-lg" />
-						))}
-					</div>
-				) : jobs.length === 0 ? (
+				{processedJobs.length === 0 && !loading ? (
 					<div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-neutral-300 bg-white p-12 text-center dark:border-neutral-700 dark:bg-neutral-900">
 						<p className="text-lg font-medium text-neutral-900 dark:text-neutral-50">
 							No jobs found
@@ -115,15 +128,13 @@ export default function JobsPage() {
 					</div>
 				) : (
 					<>
-						<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-							{jobs.map((job) => (
-								<JobCard
-									key={getJobId(job)}
-									job={job}
-									onClick={() => setSelectedJob(job)}
-								/>
-							))}
-						</div>
+						<JobTable
+							jobs={processedJobs}
+							onJobClick={setSelectedJob}
+							sortConfig={sortConfig}
+							onSort={handleSort}
+							loading={loading}
+						/>
 
 						{totalPages > 1 && (
 							<div className="mt-8 flex items-center justify-between border-t border-neutral-200 pt-6 dark:border-neutral-800">
